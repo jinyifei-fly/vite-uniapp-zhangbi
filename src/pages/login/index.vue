@@ -4,7 +4,6 @@ import { reactive, ref } from 'vue'
 import { appName } from '@/settings/index.mjs'
 import { useUserStore } from '@/store/user'
 
-const richView = useRichView()
 const router = useRouter()
 const form = reactive({
   username: '',
@@ -16,6 +15,10 @@ const isLoading = ref(false)
 const focusedField = ref('')
 
 async function handleLogin() {
+  if (!agreed.value) {
+    uni.showToast({ title: '请阅读并同意服务协议', icon: 'none' })
+    return
+  }
   if (!form.username || !form.password) {
     uni.showToast({ title: '请输入账号和密码', icon: 'none' })
     return
@@ -32,15 +35,17 @@ async function handleLogin() {
       if (res.statusCode === 200) {
         const { code, data, message } = res.data
         if (code === 1) {
-          const { id: merchantId, token, username } = data
+          const { id: merchantId, token, username, role } = data
 
-          uni.setStorageSync('merchantToken', token)
-          uni.setStorageSync('merchantId', username)
-          uni.setStorageSync('merchantName', username)
+          uni.setStorageSync('token', token)
+          uni.setStorageSync('merchantId', merchantId)
+          uni.setStorageSync('username', username)
+          uni.setStorageSync('role', role)
+
           console.log(merchantId)
-
+          // 同步到 pinia
           const userStore = useUserStore()
-          userStore.setAuthData(token, merchantId, username)
+          userStore.setAuthData(token, merchantId, username, role)
           uni.showToast({ title: '登录成功', icon: 'success' })
 
           router.pushTab({
@@ -69,25 +74,6 @@ async function handleLogin() {
 
 function toggleAgreement() {
   agreed.value = !agreed.value
-}
-
-function onAgreementClick() {
-  // 保持原有逻辑，仅微调样式
-  richView.open({
-    title: '服务协议',
-    content: `
-      <div style="padding: 24px; line-height: 1.8; color: #1f2937; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-        <h3 style="color: #111827; margin-bottom: 12px; font-size: 18px; font-weight: 600;">服务条款</h3>
-        <p style="margin-bottom: 12px; font-size: 15px;">欢迎使用 ${appName}，请阅读以下内容：</p>
-        <ul style="padding-left: 20px; font-size: 14px; color: #4b5563;">
-           <li style="margin-bottom: 8px;">1. 合规使用承诺</li>
-           <li style="margin-bottom: 8px;">2. 隐私与数据安全保护</li>
-           <li>3. 最终解释权归属</li>
-        </ul>
-      </div>
-    `,
-    style: { width: '85%', maxWidth: '500px', borderRadius: '16px' },
-  })
 }
 </script>
 
@@ -159,24 +145,6 @@ function onAgreementClick() {
           <text>{{ isLoading ? '正在登录...' : '登录' }}</text>
         </view>
       </button>
-
-      <view class="flex items-center justify-center space-x-2 pt-4">
-        <view
-          class="h-5 w-5 rounded-full border flex items-center justify-center transition-all cursor-pointer"
-          :class="agreed ? 'bg-blue-600 border-blue-600' : 'border-slate-300 bg-white'"
-          @click="toggleAgreement"
-        >
-          <view v-if="agreed" class="i-carbon-checkmark text-white text-xs font-bold scale-75"></view>
-        </view>
-        <view class="text-xs text-slate-500 flex items-center">
-          <text @click="toggleAgreement">
-            我已阅读并同意
-          </text>
-          <text class="text-blue-600 font-medium ml-1 active:opacity-70" @click.stop="onAgreementClick">
-            服务协议
-          </text>
-        </view>
-      </view>
     </view>
 
     <view class="absolute bottom-8 left-0 right-0 text-center">

@@ -122,6 +122,7 @@ async function handleLogout() {
         退出登录
       </button>
     </view>
+    <CustomTabBar :current="1" />
   </view>
 </template>
 

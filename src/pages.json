@@ -13,25 +13,36 @@
       "name": "index",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarTitleText": "主页面",
+        "navigationBarTitleText": "态势",
         "navigationBarBackgroundColor": "#FFFFFF",
         "navigationBarTextStyle": "#3b82f6"
       },
       "type": "home"
     },
     {
-      "path": "pages/goods/index",
-      "aliasPath": "/goods",
-      "name": "goodsIndex",
+      "path": "pages/task/index",
+      "aliasPath": "/task",
+      "name": "taskIndex",
       "style": {
         "navigationStyle": "custom",
-        "navigationBarTitleText": "剧本管理",
+        "navigationBarTitleText": "剧本任务",
         "navigationBarBackgroundColor": "#FFFFFF",
         "navigationBarTextStyle": "#3b82f6"
       }
     },
     {
-      "path": "pages/index/user/index",
+      "path": "pages/goods/index",
+      "aliasPath": "/goods",
+      "name": "goods",
+      "style": {
+        "navigationStyle": "custom",
+        "navigationBarTitleText": "商品",
+        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarTextStyle": "#3b82f6"
+      }
+    },
+    {
+      "path": "pages/user/index",
       "aliasPath": "/user",
       "name": "user",
       "style": {
@@ -53,137 +64,26 @@
       }
     }
   ],
-  "subPackages": [
-    {
-      "root": "pages/common",
-      "pages": [
-        {
-          "path": "web-view/index",
-          "aliasPath": "/web-view",
-          "name": "web-view",
-          "style": {
-            "navigationBarTitleText": "web-view",
-            "transparentTitle": "auto",
-            "navigationBarBackgroundColor": "#FFFFFF",
-            "navigationBarTextStyle": "#3b82f6"
-          }
-        },
-        {
-          "path": "rich-view/index",
-          "aliasPath": "/rich-view",
-          "name": "rich-view",
-          "style": {
-            "navigationBarTitleText": "rich-view",
-            "navigationBarBackgroundColor": "#FFFFFF",
-            "navigationBarTextStyle": "#3b82f6"
-          }
-        }
-      ]
-    },
-    {
-      "root": "pages/goods",
-      "pages": [
-        {
-          "path": "stock/index",
-          "aliasPath": "/goods/stock",
-          "name": "goodsStock",
-          "style": {
-            "navigationBarTitleText": "货品库存",
-            "navigationBarBackgroundColor": "#FFFFFF",
-            "navigationBarTextStyle": "#3b82f6"
-          }
-        },
-        {
-          "path": "story/index",
-          "aliasPath": "/goods/story",
-          "name": "goodsStory",
-          "style": {
-            "navigationBarTitleText": "货品故事",
-            "navigationBarBackgroundColor": "#FFFFFF",
-            "navigationBarTextStyle": "#3b82f6"
-          }
-        },
-        {
-          "path": "task/index",
-          "aliasPath": "/goods/task",
-          "name": "goodsTask",
-          "style": {
-            "navigationBarTitleText": "任务配置",
-            "navigationBarBackgroundColor": "#FFFFFF",
-            "navigationBarTextStyle": "#3b82f6"
-          }
-        }
-      ]
-    },
-    {
-      "root": "pages/template",
-      "pages": [
-        {
-          "path": "paging/index",
-          "aliasPath": "/template-paging",
-          "name": "template-paging",
-          "style": {
-            "navigationBarTitleText": "通用列表",
-            "navigationBarBackgroundColor": "#FFFFFF",
-            "navigationBarTextStyle": "#3b82f6"
-          }
-        }
-      ]
-    },
-    {
-      "root": "pages/personal",
-      "pages": [
-        {
-          "path": "index",
-          "aliasPath": "/personal",
-          "name": "personal",
-          "style": {
-            "navigationBarTitleText": "个人资料",
-            "transparentTitle": "auto",
-            "navigationBarBackgroundColor": "#FFFFFF",
-            "navigationBarTextStyle": "#3b82f6"
-          }
-        }
-      ]
-    },
-    {
-      "root": "pages/preference",
-      "pages": [
-        {
-          "path": "index",
-          "aliasPath": "/preference",
-          "name": "preference",
-          "style": {
-            "navigationBarTitleText": "偏好设置",
-            "navigationBarBackgroundColor": "#FFFFFF",
-            "navigationBarTextStyle": "#3b82f6"
-          }
-        }
-      ]
-    }
-  ],
   "tabBar": {
     "color": "#9ca3af",
     "selectedColor": "#028d71",
     "backgroundColor": "#FFFFFF",
-    "borderStyle": "#f0f2f5",
+    "borderStyle": "white",
     "list": [
       {
-        "iconPath": "static/images/tabbar/home.png",
-        "selectedIconPath": "static/images/tabbar/home-active.png",
         "pagePath": "pages/index/index",
-        "text": "主页面"
+        "text": "态势"
       },
       {
-        "iconPath": "static/images/tabbar/goods.png",
-        "selectedIconPath": "static/images/tabbar/goods-active.png",
+        "pagePath": "pages/task/index",
+        "text": "剧本"
+      },
+      {
         "pagePath": "pages/goods/index",
-        "text": "剧本管理"
+        "text": "商品"
       },
       {
-        "iconPath": "static/images/tabbar/user.png",
-        "selectedIconPath": "static/images/tabbar/user-active.png",
-        "pagePath": "pages/index/user/index",
+        "pagePath": "pages/user/index",
         "text": "我的"
       }
     ]
@@ -193,5 +93,6 @@
     "navigationBarBackgroundColor": "#FFFFFF",
     "navigationBarTextStyle": "#3b82f6",
     "backgroundColor": "#f8fafc"
-  }
+  },
+  "subPackages": []
 }

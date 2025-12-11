@@ -1,10 +1,9 @@
+import { createPinia } from 'pinia'
 import {
   createSSRApp,
 } from 'vue'
-
 import App from './App.vue'
 import router from './router'
-
 import store from './store'
 import 'uno.css'
 
@@ -13,6 +12,7 @@ export function createApp() {
 
   app.use(router)
   app.use(store)
+  app.use(createPinia())
   return {
     app,
   }
