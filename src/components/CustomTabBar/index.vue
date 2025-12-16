@@ -1,13 +1,13 @@
 <script setup>
 const props = defineProps({
-  // 当前选中的 tab 索引
+  
   current: {
     type: Number,
     default: 0,
   },
 })
 
-// 定义四个 Tab 的数据
+
 const tabList = [
   {
     text: '态势',
@@ -57,7 +57,6 @@ function switchTab(item) {
 </template>
 
 <style scoped>
-/* 适配底部安全区域 */
 .safe-area-bottom {
   padding-bottom: constant(safe-area-inset-bottom);
   padding-bottom: env(safe-area-inset-bottom);

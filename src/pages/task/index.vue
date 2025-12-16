@@ -1,7 +1,6 @@
 <script setup>
 import CustomTabBar from '@/components/CustomTabBar/index.vue'
 
-// 模拟交互
 function handleVerify() {
   uni.showToast({ title: '核销成功 -3 烧饼', icon: 'success' })
 }
@@ -147,12 +146,6 @@ function resetTask() {
             ›
           </view>
         </view>
-      </view>
-
-      <view class="text-center py-4" @click="resetTask">
-        <text class="text-gray-400 text-xs">
-          × 遇到问题？跳过此任务 (Reset)
-        </text>
       </view>
     </view>
 

@@ -14,7 +14,7 @@ export default defineUniPages({
     },
   },
   pages: [
-    // 1. 态势 (Tab 1)
+
     {
       path: 'pages/index/index',
       aliasPath: '/index',
@@ -26,7 +26,7 @@ export default defineUniPages({
         navigationBarTextStyle: navBarTextColor,
       },
     },
-    // 2. 剧本 (Tab 2)
+
     {
       path: 'pages/task/index',
       aliasPath: '/task',
@@ -38,7 +38,6 @@ export default defineUniPages({
         navigationBarTextStyle: navBarTextColor,
       },
     },
-    // 3. 商品/资产 (Tab 3) - 【新增：必须放在主包】
     {
       path: 'pages/goods/index',
       aliasPath: '/goods',
@@ -50,7 +49,7 @@ export default defineUniPages({
         navigationBarTextStyle: navBarTextColor,
       },
     },
-    // 4. 我的 (Tab 4)
+
     {
       path: 'pages/user/index',
       aliasPath: '/user',
@@ -62,7 +61,7 @@ export default defineUniPages({
         navigationBarTextStyle: navBarTextColor,
       },
     },
-    // 其他普通页面
+
     {
       path: 'pages/task/index',
       aliasPath: '/task',
@@ -86,7 +85,7 @@ export default defineUniPages({
       },
     },
   ],
-  // 底部导航栏配置 (逻辑路由，视觉上被 CustomTabBar 覆盖)
+
   tabBar: {
     color: '#9ca3af',
     selectedColor: primaryColor || '#3b82f6',
@@ -98,11 +97,11 @@ export default defineUniPages({
         text: '态势',
       },
       {
-        pagePath: 'pages/goods/index',
+        pagePath: 'pages/task/index',
         text: '剧本',
       },
       {
-        pagePath: 'pages/goods/stock/index',
+        pagePath: 'pages/goods/index',
         text: '商品',
       },
       {

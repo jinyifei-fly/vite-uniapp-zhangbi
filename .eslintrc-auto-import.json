@@ -105,21 +105,17 @@
     "useAttrs": true,
     "useCssModule": true,
     "useCssVars": true,
+    "useGoodsStore": true,
     "useId": true,
     "useModel": true,
-    "useRichView": true,
-    "useRichViewStore": true,
     "useRoute": true,
     "useRouter": true,
     "useSlots": true,
     "useTemplateRef": true,
     "useUserStore": true,
-    "useWebView": true,
-    "useWebview": true,
     "watch": true,
     "watchEffect": true,
     "watchPostEffect": true,
-    "watchSyncEffect": true,
-    "useGoodsStore": true
+    "watchSyncEffect": true
   }
 }

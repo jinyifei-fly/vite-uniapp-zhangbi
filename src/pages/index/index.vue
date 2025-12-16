@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import CustomTabBar from '@/components/CustomTabBar/index.vue'
-// 模拟数据 (结合了之前生成的逻辑)
+
 const flowList = ref([
   {
     id: 1,
@@ -33,7 +33,6 @@ const flowList = ref([
   },
 ])
 
-// 辅助函数：根据时间返回颜色类名
 function getTimeColor(time) {
   if (time <= 5)
     return 'bg-red-100 text-red-500'
@@ -42,7 +41,6 @@ function getTimeColor(time) {
   return 'bg-gray-100 text-gray-400'
 }
 
-// 辅助函数：根据标签类型返回颜色类名
 function getTagColor(type) {
   if (type === 'warning')
     return 'bg-red-50 border-red-100 text-red-500'
@@ -190,5 +188,4 @@ function getTagColor(type) {
 </template>
 
 <style lang="scss" scoped>
-/* 如果有非常特殊的阴影无法用UnoCSS满足，可以在这里补充 */
 </style>
