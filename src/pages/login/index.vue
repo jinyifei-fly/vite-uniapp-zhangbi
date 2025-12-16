@@ -25,11 +25,15 @@ async function handleLogin() {
   }
 
   isLoading.value = true
-  const url = `http://localhost:8084/zhangbi/api/user/merchant/login?username=${encodeURIComponent(form.username)}&password=${encodeURIComponent(form.password)}`
+  const baseUrl = 'https://ai.smartoptiks.cn/zhangbi/api/user/merchant/login'
 
   uni.request({
-    url,
+    url: baseUrl,
     method: 'GET',
+    data: {
+      username: form.username,
+      password: form.password,
+    },
     header: { 'Content-Type': 'application/x-www-form-urlencoded' },
     success: (res) => {
       if (res.statusCode === 200) {
@@ -42,17 +46,22 @@ async function handleLogin() {
           uni.setStorageSync('username', username)
           uni.setStorageSync('role', role)
 
-          console.log(merchantId)
           // 同步到 pinia
           const userStore = useUserStore()
           userStore.setAuthData(token, merchantId, username, role)
+
           uni.showToast({ title: '登录成功', icon: 'success' })
 
-          router.pushTab({
-            name: 'index',
-          }).catch((err) => {
-            console.error('跳转失败：', err)
-          })
+          setTimeout(() => {
+            uni.switchTab({
+              url: '/pages/index/index', // 确保路径与 pages.json 一致
+              fail: (err) => {
+                console.error('跳转失败，请检查路径:', err)
+                // 降级尝试
+                router.pushTab({ name: 'index' })
+              },
+            })
+          }, 500)
         }
         else {
           uni.showToast({ title: message || '登录失败', icon: 'none' })
@@ -135,8 +144,22 @@ function toggleAgreement() {
         </view>
       </view>
 
+      <view class="flex items-center px-2" @click="toggleAgreement">
+        <view
+          class="w-4 h-4 rounded border flex items-center justify-center mr-2 transition-colors"
+          :class="agreed ? 'bg-blue-600 border-blue-600' : 'border-slate-300 bg-white'"
+        >
+          <view v-if="agreed" class="i-carbon-checkmark text-white text-[10px]"></view>
+        </view>
+        <text class="text-xs text-slate-500">
+          我已阅读并同意 <text class="text-blue-600 font-medium">
+            《用户服务协议》
+          </text>
+        </text>
+      </view>
+
       <button
-        class="w-full mt-8 rounded-full bg-blue-600 text-white text-base font-medium py-4 shadow-lg shadow-blue-200 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed hover:bg-blue-700"
+        class="w-full mt-4 rounded-full bg-blue-600 text-white text-base font-medium py-4 shadow-lg shadow-blue-200 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed hover:bg-blue-700"
         :disabled="isLoading"
         @click="handleLogin"
       >
@@ -156,7 +179,6 @@ function toggleAgreement() {
 </template>
 
 <style scoped>
-/* 简单的淡入动效，提升质感 */
 @keyframes fadeInDown {
   from {
     opacity: 0;
@@ -172,13 +194,11 @@ function toggleAgreement() {
   animation: fadeInDown 0.6s ease-out forwards;
 }
 
-/* 移除默认 input 样式干扰 */
 input {
   outline: none;
   border: none;
 }
 
-/* UniApp 特定样式修正 */
 button::after {
   border: none;
 }
