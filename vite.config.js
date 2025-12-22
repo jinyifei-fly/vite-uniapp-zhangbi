@@ -1,65 +1,43 @@
 import path from 'node:path'
-
-import { isH5 } from '@uni-helper/uni-env'
-
-import { defineConfig } from 'vite'
-
-import { loadMapEnv } from './helpers/load-map-env/index.js'
-
+import { defineConfig, loadEnv } from 'vite'
 import postcss from './postcss.config.js'
-
 import plugins from './vite.config.plugins.js'
 
 export default defineConfig(({ mode }) => {
-  const env = loadMapEnv(mode)
-
-  const isUseProxy = env.VITE_PROXY_USE === '1'
-
-  const appBase = env.VITE_APP_BASE
-
-  const proxy = {}
-
-  if (isUseProxy && isH5) {
-    const proxyPath = env.VITE_PROXY_PATH
-    const apiOrigin = env.VITE_API_ORIGIN
-    const apiPath = env.VITE_API_PATH
-
-    proxy[proxyPath] = {
-      target: apiOrigin,
-      changeOrigin: true,
-      rewrite: (path) => {
-        return path.replace(new RegExp(`^${proxyPath}`), apiPath)
-      },
-    }
-  }
+  const env = loadEnv(mode, process.cwd())
 
   return {
-    base: appBase,
+    base: './',
+
     server: {
       port: 1045,
       cors: true,
       proxy: {
-        ...proxy,
+        '/api': {
+          target: env.VITE_API_TARGET_URL,
+          changeOrigin: true,
+          secure: false,
+
+          rewrite: path => path,
+        },
       },
     },
+
     resolve: {
       alias: {
         '@': path.resolve('./src'),
         '@root': path.resolve('./'),
-        '$uni-router': path.resolve('./helpers/uni-router'),
-        '$unocss-preset-shades': path.resolve('./helpers/unocss-preset-shades'),
       },
     },
+
     css: {
-      /** 解决外部 postcss.config.js 不被解析的问题 */
       postcss,
     },
-    build: {
-      // minify: false,
-    },
+
     define: {
       'process.env': env,
     },
+
     plugins: plugins({ env }),
   }
 })
