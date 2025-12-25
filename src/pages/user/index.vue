@@ -1,35 +1,47 @@
 <script setup>
+import { onShow } from '@dcloudio/uni-app'
 import { showModal, showToast } from '@uni-helper/uni-promises'
-import { useRouter } from 'uniapp-router-next'
 import { computed, ref } from 'vue'
-import { createTeamAPI } from '@/api/team'
+import { reportLocationAPI } from '@/api/common'
+import { createTeamAPI, getTeamListAPI, updateTeamStatusAPI } from '@/api/team'
 import CustomTabBar from '@/components/CustomTabBar/index.vue'
 import { useUserStore } from '@/store/user'
 
 const userStore = useUserStore()
-const router = useRouter()
 
 const isLogin = computed(() => !!userStore.token)
-const userName = computed(() => userStore.userName || userStore.username)
+const userName = computed(() => userStore.userName || '访客用户')
 
-const teamStats = ref({
-  teamName: '暂无队伍',
-  teamCode: '',
-  teamId: '',
-  scriptName: '未选择',
-  teamCount: 0,
-})
+const teamList = ref([
+
+])
 
 const showCreateModal = ref(false)
 const isCreating = ref(false)
 const newTeamName = ref('')
+
+onShow(() => {
+  handleReportLocation()
+  if (isLogin.value) {
+    fetchTeamList()
+  }
+})
+
+function getStatusConfig(status) {
+  const map = {
+    0: { label: '未开始', color: 'text-gray-400', bg: 'bg-gray-100', dot: 'bg-gray-400' },
+    1: { label: '进行中', color: 'text-emerald-600', bg: 'bg-emerald-100', dot: 'bg-emerald-500' },
+    2: { label: '已结束', color: 'text-red-500', bg: 'bg-red-50', dot: 'bg-red-400' },
+  }
+  return map[status] || map[0]
+}
 
 function openCreateModal() {
   if (!isLogin.value) {
     showToast({ title: '请先登录', icon: 'none' })
     return
   }
-  newTeamName.value = '' // 重置输入
+  newTeamName.value = ''
   showCreateModal.value = true
 }
 
@@ -38,16 +50,9 @@ function closeCreateModal() {
 }
 
 function handleLogin() {
-  if (isLogin.value) {
+  if (isLogin.value)
     return
-  }
-
-  uni.navigateTo({
-    url: '/pages/login/index',
-    fail: (err) => {
-      console.error('跳转登录页失败:', err)
-    },
-  })
+  uni.navigateTo({ url: '/pages/login/index' })
 }
 
 async function handleLogout() {
@@ -61,13 +66,7 @@ async function handleLogout() {
 
   if (result.confirm) {
     await userStore.logout()
-
-    uni.reLaunch({
-      url: '/pages/login/index',
-      fail: (err) => {
-        console.error('退出跳转失败:', err)
-      },
-    })
+    uni.reLaunch({ url: '/pages/login/index' })
   }
 }
 
@@ -80,47 +79,106 @@ async function handleSubmitCreate() {
   try {
     isCreating.value = true
 
-    // 调用 API
-    const res = await createTeamAPI({
-      team_name: newTeamName.value,
+    const res = await createTeamAPI({ team_name: newTeamName.value })
+
+    showToast({ title: '创建成功', icon: 'success' })
+
+    teamList.value.unshift({
+      id: res.team_id,
+      name: res.team_name,
+      code: res.binding_code,
+
+      status: res.current_status !== undefined ? res.current_status : 0,
     })
 
-    // 接口返回结构: { ok: true, team_id, binding_code, team_name, ... }
-    if (res.ok || res.team_id) {
-      showToast({ title: '创建成功', icon: 'success' })
-
-      // 2. 更新页面数据
-      teamStats.value.teamName = res.team_name
-      teamStats.value.teamCode = res.binding_code // ✅ 获取队伍码
-      teamStats.value.teamId = res.team_id // ✅ 获取队伍ID
-      teamStats.value.teamCount = 1
-
-      // 3. (可选) 持久化存储，防止刷新页面后丢失
-      uni.setStorageSync('currentTeamCode', res.binding_code)
-      uni.setStorageSync('currentTeamId', res.team_id)
-      uni.setStorageSync('currentTeamName', res.team_name)
-
-      closeCreateModal()
-    }
+    closeCreateModal()
   }
   catch (error) {
-    console.error(error)
-    const msg = error.detail?.[0]?.msg || '创建失败'
+    console.error('创建失败:', error)
+
+    const msg = error.message || '创建失败'
     showToast({ title: msg, icon: 'none' })
   }
   finally {
     isCreating.value = false
   }
 }
+async function handleReportLocation() {
+  uni.getLocation({
+    type: 'wgs84',
+    success: async (res) => {
+      try {
+        console.log('导游位置:', res.latitude, res.longitude)
 
-function handleCopyCode() {
-  if (!teamStats.value.teamCode)
+        await reportLocationAPI({
+          lat: res.latitude,
+          lng: res.longitude,
+          zone_id: 'zone_01',
+
+        })
+        console.log('位置上报成功')
+      }
+      catch (error) {
+        console.error('上报接口失败:', error)
+      }
+    },
+    fail: (err) => {
+      console.error('获取定位失败，请检查权限:', err)
+      uni.showToast({ title: '获取定位失败', icon: 'none' })
+    },
+  })
+}
+async function fetchTeamList() {
+  try {
+    const res = await getTeamListAPI()
+
+    if (Array.isArray(res)) {
+      teamList.value = res.map(item => ({
+        id: item.team_id,
+        name: item.team_name,
+        code: item.binding_code,
+        status: item.current_status,
+      }))
+    }
+  }
+  catch (error) {
+    console.error('获取列表失败', error)
+  }
+}
+
+function handleCopyCode(code) {
+  if (!code)
     return
-
   uni.setClipboardData({
-    data: teamStats.value.teamCode,
-    success: () => {
-      uni.showToast({ title: '队伍码已复制', icon: 'none' })
+    data: code,
+    success: () => uni.showToast({ title: '队伍码已复制', icon: 'none' }),
+  })
+}
+
+function handleEditTeam(team, index) {
+  uni.showActionSheet({
+    itemList: ['未开始', '进行中', '已结束'],
+    success: async (res) => {
+      const newStatusId = res.tapIndex
+
+      if (team.status === newStatusId)
+        return
+
+      try {
+        uni.showLoading({ title: '更新中...', mask: true })
+
+        const result = await updateTeamStatusAPI(team.id, newStatusId)
+
+        team.status = result.current_status !== undefined ? result.current_status : newStatusId
+
+        uni.hideLoading()
+        showToast({ title: '状态更新成功', icon: 'success' })
+      }
+      catch (error) {
+        uni.hideLoading()
+        const msg = error.message || '更新失败'
+        showToast({ title: msg, icon: 'none' })
+      }
     },
   })
 }
@@ -140,30 +198,39 @@ function handleCopyCode() {
     </view>
 
     <view class="flex-1 px-4 flex flex-col gap-5 pb-4">
-      <view class="bg-slate-800 rounded-3xl p-6 shadow-xl text-white relative overflow-hidden active:scale-[0.98] transition-transform shrink-0" @click="handleLogin">
+      <view class="bg-slate-800 rounded-3xl p-6 shadow-xl text-white relative overflow-hidden shrink-0">
         <view class="absolute -right-4 -top-4 opacity-10 text-8xl rotate-12 pointer-events-none">
           🆔
         </view>
         <view class="relative z-10 flex items-center gap-5">
-          <view class="h-20 w-20 rounded-2xl bg-slate-700 border-2 border-indigo-500/30 p-1 shadow-lg overflow-hidden shrink-0">
+          <view class="h-16 w-16 rounded-2xl bg-slate-700 border-2 border-indigo-500/30 p-1 shadow-lg overflow-hidden shrink-0">
             <image src="~@assets/images/avatar.png" class="h-full w-full object-cover rounded-xl bg-gray-600" />
           </view>
+
           <view class="flex-1 min-w-0">
-            <view v-if="isLogin">
+            <view class="flex items-center gap-3">
               <view class="text-2xl font-bold truncate">
-                {{ userName || '商户' }}
+                {{ userName }}
               </view>
-              <view class="mt-2 inline-flex items-center px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>已登录系统
-              </view>
+
+              <template v-if="!isLogin">
+                <view
+                  class="bg-indigo-500 hover:bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-full font-bold transition-colors active:scale-95 flex items-center gap-1 cursor-pointer shadow-md shadow-indigo-500/30"
+                  @click="handleLogin"
+                >
+                  <view class="i-carbon-login"></view>
+                  立即登录
+                </view>
+              </template>
+              <template v-else>
+                <view class="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold flex items-center">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>已连接
+                </view>
+              </template>
             </view>
-            <view v-else>
-              <view class="text-xl font-bold mb-1">
-                立即登录
-              </view>
-              <view class="inline-block rounded-lg bg-white/10 px-3 py-1 text-xs text-gray-300 font-bold border border-white/10">
-                未连接会话
-              </view>
+
+            <view class="mt-1 text-gray-400 text-xs font-medium">
+              {{ isLogin ? '欢迎回到商户管理系统' : '登录以管理您的队伍数据' }}
             </view>
           </view>
         </view>
@@ -180,43 +247,63 @@ function handleCopyCode() {
           </button>
         </view>
 
-        <view class="grid grid-cols-2 gap-3">
-          <view class="col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative">
-            <view class="absolute top-0 right-0 w-24 h-24 bg-indigo-50/80 rounded-bl-[60px] -mr-6 -mt-6 z-0 pointer-events-none"></view>
+        <view class="flex flex-col gap-3">
+          <view class="flex items-center justify-between px-1">
+            <text class="text-sm font-bold text-gray-500">
+              队伍列表
+            </text>
+            <text class="text-xs text-gray-400">
+              {{ teamList.length }} 个队伍
+            </text>
+          </view>
 
-            <view class="p-4 flex items-center justify-between relative z-10">
-              <view class="flex flex-col flex-1 min-w-0 mr-4">
-                <view class="flex items-center gap-2 mb-1.5">
-                  <text class="text-xs text-gray-400 font-bold">
-                    当前队伍
-                  </text>
-                  <view v-if="teamStats.teamCode" class="bg-emerald-100 text-emerald-600 text-[10px] px-1.5 py-0.5 rounded-md font-bold flex items-center gap-0.5">
-                    <span class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></span>进行中
-                  </view>
-                </view>
-                <text class="text-lg font-black text-gray-800 truncate leading-none">
-                  {{ teamStats.teamName }}
+          <view v-if="teamList.length === 0" class="bg-white rounded-2xl p-8 flex flex-col items-center justify-center text-gray-300 border border-dashed border-gray-200">
+            <view class="i-carbon-group text-4xl mb-2"></view>
+            <text class="text-xs">
+              暂无队伍，快去创建吧
+            </text>
+          </view>
+
+          <view
+            v-for="(team, index) in teamList"
+            :key="team.id || index"
+            class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center justify-between"
+          >
+            <view class="flex-1 min-w-0 flex flex-col gap-1 pr-2">
+              <view class="flex items-center gap-2">
+                <text class="text-base font-black text-gray-800 truncate">
+                  {{ team.name }}
                 </text>
               </view>
-
               <view
-                v-if="teamStats.teamCode"
-                class="flex flex-col items-end cursor-pointer active:opacity-60 transition-opacity group"
-                @click="handleCopyCode"
+                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md w-fit text-[10px] font-bold transition-colors"
+                :class="getStatusConfig(team.status).bg"
               >
-                <text class="text-[10px] text-indigo-400 font-bold mb-1 opacity-80">
-                  点击复制队伍码
+                <view class="w-1.5 h-1.5 rounded-full" :class="getStatusConfig(team.status).dot"></view>
+                <text :class="getStatusConfig(team.status).color">
+                  {{ getStatusConfig(team.status).label }}
                 </text>
-                <view class="bg-indigo-600 text-white shadow-lg shadow-indigo-200 border border-indigo-500 px-3 py-1.5 rounded-xl flex items-center gap-2 group-active:scale-95 transition-transform">
-                  <text class="text-xl font-mono font-black tracking-widest leading-none">
-                    {{ teamStats.teamCode }}
-                  </text>
-                  <view class="i-carbon-copy text-sm opacity-80"></view>
-                </view>
               </view>
+            </view>
 
-              <view v-else class="h-12 w-12 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-300">
-                <view class="i-carbon-group text-2xl"></view>
+            <view
+              class="flex flex-col items-center justify-center px-4 border-l border-r border-gray-100 mx-2 cursor-pointer active:opacity-60"
+              @click="handleCopyCode(team.code)"
+            >
+              <text class="text-[10px] text-gray-400 font-bold mb-0.5">
+                队伍码
+              </text>
+              <text class="font-mono font-black text-xl text-indigo-600 tracking-widest leading-none">
+                {{ team.code }}
+              </text>
+            </view>
+
+            <view
+              class="pl-2 flex items-center justify-center"
+              @click="handleEditTeam(team, index)"
+            >
+              <view class="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 flex items-center justify-center active:scale-90 transition-transform">
+                <view class="i-carbon-settings text-lg"></view>
               </view>
             </view>
           </view>
@@ -230,23 +317,11 @@ function handleCopyCode() {
       </template>
 
       <template v-else>
-        <view class="flex-1 flex flex-col items-center justify-center opacity-60 space-y-4">
-          <view class="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 mb-2">
-            <view class="i-carbon-user-identification text-5xl"></view>
-          </view>
+        <view class="flex-1 flex flex-col items-center justify-center opacity-40 space-y-4">
+          <view class="i-carbon-unlocked text-6xl text-gray-300"></view>
           <text class="text-gray-400 text-sm font-bold">
-            登录后管理商户队伍
+            请点击上方按钮登录
           </text>
-        </view>
-
-        <view class="mt-auto pt-6 mb-24">
-          <button
-            class="w-full bg-slate-900 text-white rounded-xl py-4 flex items-center justify-center gap-2 shadow-lg shadow-slate-300 active:scale-[0.98] transition-all font-bold text-base"
-            @click="handleLogin"
-          >
-            <view class="i-carbon-login text-xl"></view>
-            立即登录
-          </button>
         </view>
       </template>
     </view>
@@ -255,25 +330,13 @@ function handleCopyCode() {
       <CustomTabBar :current="1" />
     </view>
 
-    <view
-      v-if="showCreateModal"
-      class="fixed inset-0 z-50 flex items-center justify-center px-8"
-    >
-      <view
-        class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-        @click="closeCreateModal"
-      ></view>
-
-      <view
-        class="relative bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl animate-in-zoom overflow-hidden"
-        @click.stop
-      >
+    <view v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center px-8">
+      <view class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="closeCreateModal"></view>
+      <view class="relative bg-white w-full max-w-sm rounded-[32px] p-8 shadow-2xl animate-in-zoom overflow-hidden" @click.stop>
         <view class="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-indigo-50/80 to-transparent pointer-events-none"></view>
-
         <view class="relative h-16 w-16 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-6 mx-auto rotate-3 shadow-sm">
           <view class="i-carbon-flag-filled text-4xl"></view>
         </view>
-
         <view class="text-center mb-8 relative">
           <text class="text-2xl font-black text-gray-900 block tracking-tight">
             开启新的旅程
@@ -282,39 +345,17 @@ function handleCopyCode() {
             为你的团队起一个响亮的名字
           </text>
         </view>
-
         <view class="mb-8 relative">
           <view class="bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 transition-all flex items-center gap-3 focus-within:border-indigo-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-indigo-500/10 h-16">
             <view class="i-carbon-edit text-xl text-gray-400 shrink-0"></view>
-            <input
-              v-model="newTeamName"
-              class="flex-1 h-full text-lg text-gray-900 font-bold bg-transparent placeholder:font-normal"
-              placeholder="请输入队伍名称"
-              placeholder-class="text-gray-400"
-              :disabled="isCreating"
-              :cursor-spacing="20"
-            />
-            <view
-              v-if="newTeamName"
-              class="i-carbon-close-filled text-gray-300 text-xl active:text-gray-500 transition-colors"
-              @click="newTeamName = ''"
-            ></view>
+            <input v-model="newTeamName" class="flex-1 h-full text-lg text-gray-900 font-bold bg-transparent" placeholder="请输入队伍名称" :disabled="isCreating" :cursor-spacing="20" />
           </view>
         </view>
-
         <view class="grid grid-cols-2 gap-4">
-          <button
-            class="w-full bg-gray-50 text-gray-600 rounded-2xl py-4 text-base font-bold border-none active:bg-gray-100 active:scale-[0.98] transition-all"
-            :disabled="isCreating"
-            @click="closeCreateModal"
-          >
+          <button class="w-full bg-gray-50 text-gray-600 rounded-2xl py-4 text-base font-bold border-none" @click="closeCreateModal">
             取消
           </button>
-          <button
-            class="w-full bg-indigo-600 text-white rounded-2xl py-4 text-base font-bold border-none shadow-lg shadow-indigo-200 active:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-            :disabled="isCreating"
-            @click="handleSubmitCreate"
-          >
+          <button class="w-full bg-indigo-600 text-white rounded-2xl py-4 text-base font-bold border-none flex items-center justify-center gap-2" @click="handleSubmitCreate">
             <view v-if="isCreating" class="i-carbon-circle-dash animate-spin text-xl"></view>
             <text>{{ isCreating ? '创建中...' : '立即创建' }}</text>
           </button>
@@ -325,7 +366,6 @@ function handleCopyCode() {
 </template>
 
 <style scoped>
-/* 定义弹窗进入动画 */
 @keyframes zoomIn {
   from {
     opacity: 0;
@@ -336,21 +376,11 @@ function handleCopyCode() {
     transform: scale(1) translateY(0);
   }
 }
-
 .animate-in-zoom {
   animation: zoomIn 0.2s ease-out forwards;
 }
-
-/* 基础样式 */
-* {
-  -webkit-tap-highlight-color: transparent;
-  tap-highlight-color: transparent;
-}
 button::after {
   border: none;
-}
-button:disabled {
-  opacity: 0.7;
 }
 .pb-safe {
   padding-bottom: constant(safe-area-inset-bottom);
