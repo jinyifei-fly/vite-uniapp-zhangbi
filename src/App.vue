@@ -1,34 +1,51 @@
 <script setup>
-// #ifdef WEB
-
+import { onHide, onLaunch, onShow } from '@dcloudio/uni-app'
 import { updateShades } from '@root/helpers/unocss-preset-shades'
-// #endif
+
+import { watchEffect } from 'vue'
+
+import { useAppStore } from '@/store/app'
+
+import { useSocketStore } from '@/store/socket'
+import { useUserStore } from '@/store/user'
+
+const userStore = useUserStore()
+const socketStore = useSocketStore()
+const appStore = useAppStore()
 
 onLaunch(() => {
-  console.log('App Launch')
-  uni.hideTabBar()
+  console.log('🚀 App Launch')
+
+  uni.hideTabBar().catch(() => {})
+
+  if (userStore.token) {
+    console.log('✅ 检测到 Token，连接 Socket...')
+    socketStore.connect()
+  }
+  else {
+    console.log('⚠️ 无 Token，跳过 Socket 连接')
+  }
 })
+
 onShow(() => {
   console.log('App Show')
-  uni.hideTabBar()
+  uni.hideTabBar().catch(() => {})
 })
+
 onHide(() => {
   console.log('App Hide')
 })
 
-const appStore = useAppStore()
-
-// #ifdef WEB
 watchEffect(() => {
-  updateShades(appStore.primaryColor)
+  if (appStore.primaryColor) {
+    updateShades(appStore.primaryColor)
+  }
 })
-// #endif
 </script>
 
 <style lang="scss">
-// #ifndef APP-NVUE
 @import '@unocss-applet/reset/uni-app/button-after.css';
 @import '@unocss-applet/reset/uni-app/tailwind-compat.css';
-// #endif
+
 @import './styles/css/index.css';
 </style>

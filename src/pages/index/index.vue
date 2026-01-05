@@ -1,70 +1,162 @@
 <script setup>
-import { ref } from 'vue'
+import { onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
+import { ref, watch } from 'vue'
+import { getTeamListAPI, updateTeamStatusAPI } from '@/api/team'
 import CustomTabBar from '@/components/CustomTabBar/index.vue'
+import { useGameStore } from '@/store/game'
+import { useUserStore } from '@/store/user'
+
+const gameStore = useGameStore()
+const userStore = useUserStore()
+
+const scriptOptions = [
+  { id: 'S001', name: '粮仓奇遇记', desc: '在王记粮仓寻找消失的钥匙' },
+  { id: 'S002', name: '古城大逃亡', desc: '限时 60 分钟的古城解谜' },
+  { id: 'S003', name: '消失的宝藏', desc: '沉浸式角色扮演任务' },
+]
+
+onShow(() => {
+  if (userStore.token) {
+    gameStore.initSocket()
+  }
+})
+
+function handleAssignScript(team) {
+  uni.showActionSheet({
+    itemList: scriptOptions.map(s => s.name),
+    success: async (res) => {
+      const selected = scriptOptions[res.tapIndex]
+
+      gameStore.joinTeam(team.team_id, {
+        userId: userStore.userId,
+        userName: userStore.userName,
+      })
+
+      gameStore.emitEvent('game:select_script', {
+        script_id: selected.id,
+        team_id: team.team_id,
+        timestamp: new Date().toISOString(),
+      })
+
+      try {
+        await updateTeamStatusAPI(team.team_id, 2)
+        team.current_status = 2
+        uni.showToast({ title: '剧本已分配', icon: 'success' })
+      }
+      catch (error) {
+        console.error('更新状态失败', error)
+        uni.showToast({ title: '状态同步失败', icon: 'none' })
+      }
+    },
+  })
+}
+
+function handleStartGame(team) {
+  uni.showModal({
+    title: '准备开局',
+    content: `剧本已分配，确定要开始《${team.team_name}》的游戏吗？`,
+    confirmText: '立即开始',
+    confirmColor: '#10B981',
+    success: (res) => {
+      if (res.confirm) {
+        gameStore.joinTeam(team.team_id, {
+          userId: userStore.userId,
+          userName: userStore.userName,
+        })
+
+        gameStore.emitEvent('game:start', {
+          game_id: team.game_id || team.team_id,
+          timestamp: new Date().toISOString(),
+        })
+
+        team.current_status = 2
+        uni.showToast({ title: '游戏已开始', icon: 'success' })
+      }
+    },
+  })
+}
 
 const currentView = ref('dashboard')
+const teamList = ref([])
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+const isLoading = ref(false)
 
 const flowList = ref([
-  {
-    id: 1,
-    teamName: '飞虎队',
-    peopleCount: 5,
-    taskName: '寻找粮仓钥匙',
-    arrivalTime: 3,
-    tags: [{ label: '⚠️ 坚果过敏', type: 'warning' }],
-  },
-  {
-    id: 2,
-    teamName: '探险小分队',
-    peopleCount: 3,
-    taskName: '购买补给',
-    arrivalTime: 12,
-    tags: [],
-  },
-  {
-    id: 3,
-    teamName: '历史研学团',
-    peopleCount: 12,
-    taskName: '参观壁画',
-    arrivalTime: 25,
-    tags: [{ label: '👨‍🦽 轮椅需求', type: 'info' }],
-  },
+  { id: 1, teamName: '飞虎队', peopleCount: 5, taskName: '寻找钥匙', arrivalTime: 3, tags: [{ label: '⚠️ 过敏', type: 'warning' }] },
+  { id: 2, teamName: '探险队', peopleCount: 3, taskName: '购买补给', arrivalTime: 12, tags: [] },
+  { id: 3, teamName: '研学团', peopleCount: 12, taskName: '参观壁画', arrivalTime: 25, tags: [{ label: '👨‍🦽 轮椅', type: 'info' }] },
 ])
 
-const teamList = ref([
-  { id: 101, name: '飞虎队', script: '粮仓奇遇记', status: 'running', count: 5 },
-  { id: 102, name: '无敌暴龙战队', script: '古城大逃亡', status: 'paused', count: 4 },
-  { id: 103, name: '快乐一家人', script: '寻找消失的宝藏', status: 'finished', count: 3 },
-  { id: 104, name: '公司团建A组', script: '粮仓奇遇记', status: 'running', count: 10 },
-  { id: 105, name: '周末游击队', script: '未知剧本', status: 'waiting', count: 2 },
-  { id: 106, name: '测试队伍001', script: '系统调试', status: 'offline', count: 1 },
-])
+watch(currentView, (newVal) => {
+  if (newVal === 'teams' && teamList.value.length === 0) {
+    fetchTeamList(true)
+  }
+})
+
+async function fetchTeamList(reset = false, silent = false) {
+  if (reset) {
+    page.value = 1
+    if (!silent) {
+      teamList.value = []
+      isLoading.value = true
+    }
+  }
+  try {
+    const res = await getTeamListAPI({ page: page.value, size: pageSize.value })
+    let newItems = []
+
+    if (res && res.data && Array.isArray(res.data.items)) {
+      newItems = res.data.items
+      total.value = res.data.total || 0
+    }
+    else if (res && Array.isArray(res.items)) {
+      newItems = res.items
+      total.value = res.total || 0
+    }
+
+    teamList.value = reset ? newItems : [...teamList.value, ...newItems]
+  }
+  catch (error) {
+    console.error(error)
+  }
+  finally {
+    isLoading.value = false
+    uni.stopPullDownRefresh()
+  }
+}
+
+onPullDownRefresh(() => {
+  if (currentView.value === 'teams')
+    fetchTeamList(true)
+  else setTimeout(() => uni.stopPullDownRefresh(), 1000)
+})
+
+onReachBottom(() => {
+  if (currentView.value === 'teams' && teamList.value.length < total.value) {
+    page.value++
+    fetchTeamList()
+  }
+})
 
 function getTimeColor(time) {
   if (time <= 5)
     return 'bg-red-100 text-red-500'
-  if (time <= 15)
-    return 'bg-gray-100 text-gray-600'
-  return 'bg-gray-100 text-gray-400'
+  return 'bg-gray-100 text-gray-600'
 }
-
 function getTagColor(type) {
-  if (type === 'warning')
-    return 'bg-red-50 border-red-100 text-red-500'
-  if (type === 'info')
-    return 'bg-orange-50 border-orange-100 text-orange-500'
-  return 'bg-gray-50 border-gray-200 text-gray-500'
+  return type === 'warning' ? 'bg-red-50 border-red-100 text-red-500' : 'bg-orange-50 border-orange-100 text-orange-500'
 }
 
 function getStatusConfig(status) {
   const map = {
-    running: { color: 'bg-green-500', text: '进行中', bg: 'bg-green-50 text-green-600' },
-    paused: { color: 'bg-orange-500', text: '暂停', bg: 'bg-orange-50 text-orange-600' },
-    finished: { color: 'bg-gray-400', text: '已结束', bg: 'bg-gray-100 text-gray-400' },
-    waiting: { color: 'bg-blue-400', text: '待开局', bg: 'bg-blue-50 text-blue-500' },
-    offline: { color: 'bg-red-400', text: '离线', bg: 'bg-red-50 text-red-500' },
+    0: { color: 'text-gray-500', bg: 'bg-gray-100', text: '组建中' },
+    1: { color: 'text-blue-600', bg: 'bg-blue-50', text: '已就绪' },
+    2: { color: 'text-green-600', bg: 'bg-green-50', text: '进行中' },
+    3: { color: 'text-red-500', bg: 'bg-red-50', text: '已结束' },
   }
-  return map[status] || map.offline
+  return map[status] || map[0]
 }
 </script>
 
@@ -75,8 +167,10 @@ function getStatusConfig(status) {
         <text class="text-xl font-black text-gray-900 tracking-tight">
           Merchant OS
         </text>
-        <view class="bg-indigo-100 text-indigo-600 text-xs px-1.5 py-0.5 rounded font-bold">
-          v2.2
+        <view class="flex items-center gap-1 bg-indigo-100 text-indigo-600 text-[10px] px-1.5 py-0.5 rounded font-bold">
+          <view v-if="gameStore.isWsConnected" class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></view>
+          <view v-else class="w-1.5 h-1.5 rounded-full bg-red-500"></view>
+          {{ gameStore.isWsConnected ? 'LIVE' : 'OFFLINE' }}
         </view>
       </view>
 
@@ -109,30 +203,23 @@ function getStatusConfig(status) {
           <view class="relative z-10 flex justify-between items-start">
             <view>
               <view class="flex items-center gap-2 mb-1">
-                <text class="text-lg">
-                  📍
-                </text>
                 <text class="text-xl font-bold">
-                  王记粮仓 (节点#042)
+                  📍 王记粮仓 (#042)
                 </text>
               </view>
-              <view class="flex items-center gap-1 opacity-90 text-sm">
-                <view class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></view>
-                <text>AI流量分发开启</text>
-              </view>
-            </view>
-            <view class="bg-white/20 p-1 rounded-full w-12 h-7 flex items-center justify-end px-1">
-              <view class="w-5 h-5 bg-white rounded-full shadow-sm"></view>
+              <text class="opacity-90 text-sm">
+                AI流量分发开启
+              </text>
             </view>
           </view>
         </view>
 
         <view class="grid grid-cols-2 gap-3 animate-fade-in">
           <view class="bg-white rounded-xl p-4 shadow-sm flex flex-col justify-between">
-            <view class="flex items-center gap-1 text-gray-500 text-xs mb-2">
-              <text>👥 当前排队/承载力</text>
-            </view>
-            <view class="flex items-baseline gap-1 mb-2">
+            <text class="text-gray-500 text-xs mb-2">
+              👥 当前排队
+            </text>
+            <view class="flex items-baseline gap-1">
               <text class="text-3xl font-black text-gray-900">
                 5
               </text>
@@ -140,16 +227,15 @@ function getStatusConfig(status) {
                 / 20人
               </text>
             </view>
-            <view class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+            <view class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mt-2">
               <view class="bg-green-500 h-full rounded-full" style="width: 25%"></view>
             </view>
           </view>
-
           <view class="bg-white rounded-xl p-4 shadow-sm flex flex-col justify-between">
-            <view class="flex items-center gap-1 text-gray-500 text-xs mb-2">
-              <text>🕒 预计15分钟客流</text>
-            </view>
-            <view class="flex items-baseline gap-1 mb-2">
+            <text class="text-gray-500 text-xs mb-2">
+              🕒 预计客流
+            </text>
+            <view class="flex items-baseline gap-1">
               <text class="text-3xl font-black text-indigo-600">
                 17
               </text>
@@ -157,7 +243,7 @@ function getStatusConfig(status) {
                 人
               </text>
             </view>
-            <view class="bg-red-50 text-red-500 text-[10px] px-2 py-0.5 rounded flex items-center w-max">
+            <view class="bg-red-50 text-red-500 text-[10px] px-2 py-0.5 rounded w-max mt-2">
               ⚠️ 含特殊需求
             </view>
           </view>
@@ -169,12 +255,12 @@ function getStatusConfig(status) {
               流量预报
             </text>
             <view class="bg-blue-100 text-blue-600 text-xs px-2 py-0.5 rounded-full font-medium">
-              ● 实时更新
+              ● 实时
             </view>
           </view>
           <view class="space-y-4">
             <view v-for="item in flowList" :key="item.id" class="flex items-center gap-3 pb-3 border-b border-gray-50 last:border-0 last:pb-0">
-              <view class="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm" :class="getTimeColor(item.arrivalTime)">
+              <view class="w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm" :class="getTimeColor(item.arrivalTime)">
                 {{ item.arrivalTime }}m
               </view>
               <view class="flex-1">
@@ -195,9 +281,6 @@ function getStatusConfig(status) {
                   </view>
                 </view>
               </view>
-              <view class="text-gray-300">
-                ›
-              </view>
             </view>
           </view>
         </view>
@@ -205,61 +288,103 @@ function getStatusConfig(status) {
 
       <template v-else>
         <view class="flex gap-2 animate-fade-in">
-          <view class="flex-1 bg-white h-10 rounded-xl flex items-center px-3 shadow-sm text-gray-400 text-sm">
+          <view class="flex-1 bg-white h-11 rounded-2xl flex items-center px-4 shadow-sm text-gray-400 text-sm">
             🔍 搜索队伍...
           </view>
-          <view class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-gray-500">
-            🌪️
-          </view>
         </view>
 
-        <view class="space-y-3 animate-slide-up">
+        <view class="space-y-5">
+          <view v-if="isLoading && teamList.length === 0" class="py-10 text-center text-gray-400 text-xs">
+            获取实时数据中...
+          </view>
+          <view v-else-if="teamList.length === 0" class="py-10 text-center text-gray-400 text-xs">
+            暂无队伍信息
+          </view>
+
           <view
-            v-for="team in teamList"
-            :key="team.id"
-            class="bg-white p-4 rounded-xl shadow-sm flex justify-between items-center active:bg-gray-50 transition-colors"
+            v-for="team in teamList" :key="team.team_id"
+            class="bg-white rounded-[24px] shadow-xl overflow-hidden border border-gray-50 animate-slide-up"
           >
-            <view class="flex items-center gap-3">
-              <view class="w-10 h-10 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center font-bold text-lg">
-                {{ team.name.charAt(0) }}
+            <view class="p-5 flex justify-between items-start bg-gradient-to-br from-white to-gray-50">
+              <view>
+                <view class="flex items-center gap-2 mb-1">
+                  <text class="text-xl font-black text-gray-900">
+                    {{ team.team_name }}
+                  </text>
+                  <view :class="[getStatusConfig(team.current_status).bg, getStatusConfig(team.current_status).color]" class="px-2 py-0.5 rounded-full text-[10px] font-bold">
+                    {{ getStatusConfig(team.current_status).text }}
+                  </view>
+                </view>
               </view>
 
-              <view>
-                <view class="flex items-center gap-2">
-                  <text class="font-bold text-gray-800 text-base">
-                    {{ team.name }}
-                  </text>
-                  <text class="text-gray-400 text-xs">
-                    ({{ team.count }}人)
-                  </text>
+              <view class="bg-indigo-600 px-3 py-2 rounded-xl text-center shadow-md shadow-indigo-100">
+                <text class="block text-[8px] text-white/70 font-bold tracking-widest mb-0.5">
+                  队伍码
+                </text>
+                <text class="text-lg font-black text-white font-mono">
+                  {{ team.binding_code }}
+                </text>
+              </view>
+            </view>
+
+            <view class="px-5 py-4 border-t border-gray-50">
+              <view class="flex justify-between items-center mb-3">
+                <view class="flex -space-x-2">
+                  <view
+                    v-for="i in Math.min(3, gameStore.roomStates[team.team_id]?.memberCount || team.size)" :key="i"
+                    class="w-8 h-8 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-xs"
+                  >
+                    👤
+                  </view>
+                  <view
+                    v-if="(gameStore.roomStates[team.team_id]?.memberCount || team.size) > 3"
+                    class="w-8 h-8 rounded-full border-2 border-white bg-indigo-50 text-indigo-600 flex items-center justify-center text-[10px] font-bold"
+                  >
+                    +{{ (gameStore.roomStates[team.team_id]?.memberCount || team.size) - 3 }}
+                  </view>
                 </view>
-                <view class="flex items-center gap-1.5 mt-1">
-                  <view class="w-1.5 h-1.5 rounded-full" :class="getStatusConfig(team.status).color"></view>
-                  <text class="text-xs text-gray-500">
-                    {{ getStatusConfig(team.status).text }}
+                <view class="text-right">
+                  <text class="text-xs text-gray-400 block">
+                    实时在线人数
+                  </text>
+                  <text class="text-lg font-black text-indigo-600">
+                    {{ gameStore.roomStates[team.team_id]?.memberCount || team.size }} <text class="text-[10px] text-gray-400 font-normal">
+                      / 5
+                    </text>
                   </text>
                 </view>
               </view>
             </view>
 
-            <view class="flex flex-col items-end gap-1">
-              <view class="flex items-center gap-1">
-                <text class="i-carbon-script text-gray-400 text-xs">
-                  📜
-                </text>
-                <text class="text-sm font-medium text-gray-600 max-w-[120px] truncate text-right">
-                  {{ team.script }}
-                </text>
-              </view>
-              <text class="text-[10px] text-gray-300">
-                ID: {{ team.id }}
-              </text>
+            <view class="px-5 py-4 bg-gray-50/50 flex gap-3">
+              <template v-if="team.current_status === 1 || team.current_status === 2">
+                <button
+                  class="flex-1 bg-white border border-indigo-100 text-indigo-600 rounded-xl py-3 text-sm font-bold shadow-sm flex items-center justify-center gap-1 active:scale-95"
+                  @click="handleAssignScript(team)"
+                >
+                  🎭 分配剧本
+                </button>
+
+                <button
+                  class="flex-1 bg-emerald-500 text-white rounded-xl py-3 text-sm font-bold shadow-lg shadow-emerald-100 flex items-center justify-center gap-2 active:scale-95"
+                  @click="handleStartGame(team)"
+                >
+                  🚀 开始游戏
+                </button>
+              </template>
+
+              <button
+                v-else
+                class="flex-1 bg-gray-800 text-white rounded-xl py-3 text-sm font-bold flex items-center justify-center gap-2 active:scale-95"
+              >
+                设置
+              </button>
             </view>
           </view>
         </view>
 
-        <view class="text-center py-8 text-gray-400 text-sm">
-          - 暂无更多队伍 -
+        <view v-if="teamList.length > 0" class="text-center py-8 text-gray-400 text-xs" @click="fetchTeamList()">
+          {{ teamList.length >= total ? '- 数据已全部同步 -' : '上拉加载更多历史队伍' }}
         </view>
       </template>
     </view>
@@ -268,7 +393,39 @@ function getStatusConfig(status) {
 </template>
 
 <style scoped>
-/* 简单的进入动画 */
+/* 按钮点击反馈 */
+button {
+  margin: 0;
+  line-height: 1.5;
+  transition: transform 0.1s;
+}
+button:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+button::after {
+  border: none;
+}
+
+.shadow-xl {
+  box-shadow:
+    0 15px 30px -5px rgba(0, 0, 0, 0.05),
+    0 8px 12px -7px rgba(0, 0, 0, 0.03);
+}
+
+.animate-slide-up {
+  animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes slideUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -277,21 +434,7 @@ function getStatusConfig(status) {
     opacity: 1;
   }
 }
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 .animate-fade-in {
-  animation: fadeIn 0.3s ease-out;
-}
-.animate-slide-up {
-  animation: slideUp 0.4s ease-out;
+  animation: fadeIn 0.4s ease-out;
 }
 </style>
