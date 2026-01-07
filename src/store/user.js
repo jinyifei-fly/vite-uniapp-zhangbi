@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { loginAPI } from '@/api/auth'
+import { getMe, loginAPI } from '@/api/auth'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(uni.getStorageSync('token') || '')
@@ -11,78 +11,78 @@ export const useUserStore = defineStore('user', () => {
   const userName = ref(uni.getStorageSync('userName') || '')
   const userInfo = ref(uni.getStorageSync('userInfo') || {})
 
+  const getUserInfo = async () => {
+    try {
+      console.log('🚀 [Store] 正在调用 getMe 接口...')
+      const res = await getMe()
+
+      console.log('📦 [Store] getMe 原始返回数据:', res)
+
+      if (!res || !res.data) {
+        console.error('❌ [Store] getMe 返回结构异常，缺少 data 字段')
+        return
+      }
+
+      const { user, profile } = res.data
+
+      console.log('👤 [Store] 解构出的 user 对象:', user)
+      console.log('📄 [Store] 解构出的 profile 对象:', profile)
+
+      const realUserId = user ? (user.user_id || user.id || user.uuid) : ''
+      const realUserName = user ? (user.username || user.name) : ''
+      const realRole = user ? (user.user_type || user.role) : ''
+
+      console.log('🔑 [Store] 提取到的 UserID:', realUserId)
+
+      userId.value = realUserId
+      userName.value = realUserName
+      role.value = realRole
+
+      const fullInfo = { ...(user || {}), ...(profile || {}) }
+      userInfo.value = fullInfo
+
+      uni.setStorageSync('userId', realUserId)
+      uni.setStorageSync('userName', realUserName)
+      uni.setStorageSync('role', realRole)
+      uni.setStorageSync('userInfo', fullInfo)
+
+      return res.data
+    }
+    catch (error) {
+      console.error('❌ [Store] 获取用户信息失败:', error)
+      throw error
+    }
+  }
+
   const login = async (loginForm) => {
+    console.log('🚀 [Store] 开始登录...')
     const res = await loginAPI(loginForm)
 
-    const { access_token, token_type, role: userRole, user } = res.data
+    console.log('📦 [Store] Login 接口原始返回:', res)
+
+    const { access_token, token_type } = res.data || {}
+
+    if (!access_token) {
+      console.error('❌ [Store] 登录返回中没有 access_token!')
+    }
 
     token.value = access_token
     tokenType.value = token_type || 'Bearer'
-    role.value = userRole
-
-    if (user) {
-      userId.value = user.user_id || user.id
-      userName.value = user.username || user.name
-      userInfo.value = user
-
-      uni.setStorageSync('userId', userId.value)
-      uni.setStorageSync('userInfo', user)
-    }
-    else {
-      userName.value = loginForm.username
-    }
 
     uni.setStorageSync('token', access_token)
     uni.setStorageSync('tokenType', tokenType.value)
-    uni.setStorageSync('role', userRole)
-    uni.setStorageSync('userName', userName.value)
+
+    console.log('🔄 [Store] Token已存，准备获取用户信息...')
+    await getUserInfo()
 
     return res
   }
 
-  const setUserInfo = (data) => {
-    const id = data.user_id || data.id || ''
-    const name = data.username || data.name || ''
-
-    userId.value = id
-    userName.value = name
-    userInfo.value = data
-    if (data.role)
-      role.value = data.role
-
-    uni.setStorageSync('userId', id)
-    uni.setStorageSync('userName', name)
-    uni.setStorageSync('userInfo', data)
-    uni.setStorageSync('role', role.value)
-
-    console.log('✅ [UserStore] 用户信息已更新:', { id, name })
-  }
-
   const logout = () => {
     token.value = ''
-    tokenType.value = ''
-    role.value = ''
     userId.value = ''
-    userName.value = ''
     userInfo.value = {}
-
-    uni.removeStorageSync('token')
-    uni.removeStorageSync('tokenType')
-    uni.removeStorageSync('role')
-    uni.removeStorageSync('userId')
-    uni.removeStorageSync('userName')
-    uni.removeStorageSync('userInfo')
-  }
-
-  const getAuthHeader = () => {
-    if (!token.value)
-      return ''
-
-    const type = tokenType.value
-      ? tokenType.value.charAt(0).toUpperCase() + tokenType.value.slice(1)
-      : 'Bearer'
-
-    return `${type} ${token.value}`
+    uni.clearStorageSync()
   }
 
   return {
@@ -94,7 +94,6 @@ export const useUserStore = defineStore('user', () => {
     userInfo,
     login,
     logout,
-    setUserInfo,
-    getAuthHeader,
+    getUserInfo,
   }
 })

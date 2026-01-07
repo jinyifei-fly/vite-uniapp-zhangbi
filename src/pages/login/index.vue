@@ -27,46 +27,23 @@ async function handleLogin() {
   try {
     isLoading.value = true
 
-    const res = await userStore.login({
+    await userStore.login({
       username: form.username,
       password: form.password,
     })
-    console.log('登录信息', res)
-
-    console.log('🔍 [Login] 登录接口返回:', res)
-
-    if (res.data && res.data.user) {
-      userStore.setUserInfo(res.data.user)
-    }
-    else {
-      if (!userStore.userId) {
-        console.warn('⚠️ [Login] 接口未返回 user_id，使用用户名兜底')
-        userStore.setUserInfo({
-          user_id: form.username,
-          username: form.username,
-        })
-      }
-    }
 
     uni.showToast({ title: '登录成功', icon: 'success' })
 
     setTimeout(() => {
       uni.switchTab({
         url: '/pages/index/index',
-        success: () => {
-          console.log('✅ 跳转首页成功')
-        },
-        fail: (err) => {
-          console.error('❌ 跳转首页失败 (请检查 pages.json tabBar 配置):', err)
-
-          uni.navigateTo({ url: '/pages/index/index' })
-        },
+        fail: () => uni.reLaunch({ url: '/pages/index/index' }),
       })
     }, 500)
   }
   catch (error) {
-    console.error('❌ 登录失败:', error)
-    const msg = error.msg || error.message || '登录失败，请检查网络或账号'
+    console.error('登录异常:', error)
+    const msg = error.message || error.msg || '登录失败，请稍后重试'
     uni.showToast({ title: msg, icon: 'none' })
   }
   finally {
@@ -170,6 +147,7 @@ function toggleAgreement() {
 </template>
 
 <style scoped>
+/* 简单的入场动画 */
 @keyframes fadeInDown {
   from {
     opacity: 0;
@@ -180,13 +158,18 @@ function toggleAgreement() {
     transform: translateY(0);
   }
 }
+
 .animate-fade-in-down {
   animation: fadeInDown 0.6s ease-out forwards;
 }
+
+/* 去除输入框默认边框 */
 input {
   outline: none;
   border: none;
 }
+
+/* 去除按钮默认边框 */
 button::after {
   border: none;
 }
