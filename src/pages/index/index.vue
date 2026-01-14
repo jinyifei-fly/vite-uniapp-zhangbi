@@ -49,6 +49,46 @@ function addEventLog(type, content, teamName = '未知队伍') {
   eventLogs.value = [log, ...eventLogs.value].slice(0, 20)
 }
 
+// 🟢 [新增] 智能获取当前操作目标 (主任务 or 子任务)
+function getCurrentTarget() {
+  const task = gameStore.currentTask
+  if (!task)
+    return null
+
+  // A. 如果是单层任务，直接返回主任务
+  if (!task.having_sub_tasks) {
+    return {
+      targetObj: task,
+      isSubTask: false,
+      id: task.task_id,
+      name: task.stage_name || task.game_name,
+    }
+  }
+
+  // B. 如果有子任务，必须找到“当前正在进行”的那一个
+  const currentSubId = gameStore.curSubTaskId || task.sub_tasks?.find(s => !s.is_finished)?.sub_task_id
+
+  if (currentSubId && task.sub_tasks) {
+    const subTask = task.sub_tasks.find(s => s.sub_task_id === currentSubId)
+    if (subTask) {
+      return {
+        targetObj: subTask,
+        isSubTask: true,
+        id: subTask.sub_task_id,
+        name: subTask.sub_task_name || '子任务',
+      }
+    }
+  }
+
+  // C. 兜底：如果找不到子任务，还是返回主任务 (虽然这可能导致逻辑错误，但在过渡期能防崩)
+  return {
+    targetObj: task,
+    isSubTask: false,
+    id: task.task_id,
+    name: task.stage_name,
+  }
+}
+
 function attachPageListeners(socket) {
   // 清理旧监听
   socket.off('game:game_created')
@@ -174,7 +214,7 @@ function attachPageListeners(socket) {
     }
   })
 
-  // 🟢 5. 新任务 (核心修复：合并数据结构 + 强制重置状态)
+  // 5. 新任务
   socket.on('game:new_task', (data) => {
     console.log('📡 [Page] 收到新任务 (原始数据):', data)
 
@@ -182,14 +222,12 @@ function attachPageListeners(socket) {
     // 优先从外层取，取不到再去 player_state 里取
     const incomingTeamId = data.team_id || (data.player_state && data.player_state.team_id)
 
-    // 2. 🟢 [关键修复] 构造“完全体”任务对象
-    // 后端把 mechanisms 放在了外面，我们需要把它捡回来，塞进 task 里
+    // 2.构造“完全体”任务对象
     let fullTaskObject = null
 
     if (data.task) {
       fullTaskObject = {
-        ...data.task, // 展开原始 task
-        // 优先取外层的 mechanisms (兄弟节点)，如果外层没有，再看 task 里面有没有
+        ...data.task,
         task_complete_mechanisms: data.task_complete_mechanisms || data.task.task_complete_mechanisms || [],
       }
     }
@@ -202,8 +240,6 @@ function attachPageListeners(socket) {
     }
 
     // 3. 🟢 [关键修复] 强制重置 Store 状态
-    // 既然新任务来了，那肯定不再是“完成状态”了
-    // 我们手动设置 store 属性，确保 UI 瞬间变回操作按钮
     if (incomingTeamId === gameStore.currentTeamId) {
       gameStore.isCurrentTaskComplete = false
     }
@@ -327,22 +363,43 @@ onUnmounted(() => {
   }
 })
 
+// 🟢 计算按钮配置
 const actionButtonConfig = computed(() => {
-  const task = gameStore.currentTask
-  if (!task)
-    return { text: '加载中...', color: 'bg-gray-400', icon: '⏳', isForce: false }
+  const target = getCurrentTarget()
 
-  const mechanisms = task.task_complete_mechanisms || []
+  // 1. 数据未加载
+  if (!target) {
+    return { text: '加载中...', color: 'bg-gray-400', icon: '⏳', isForce: false }
+  }
+
+  const { targetObj, isSubTask } = target
+
+  // 2. 获取机制列表
+  const mechanisms = targetObj.task_complete_mechanisms || targetObj.task_complete_mechanism || []
+
+  // 3. 判断是否需要 STAFF_CONFIRM
   const hasStaffConfirm = mechanisms.some(m => m.mechanism_name === 'STAFF_CONFIRM')
 
+  // 4. 构造显示文案
+  const suffix = isSubTask ? '(子任务)' : ''
+
   if (hasStaffConfirm) {
-    return { text: '确认通过 ', color: 'bg-emerald-500 shadow-emerald-200', icon: '✅', isForce: false }
+    return {
+      text: `确认通过 ${suffix}`,
+      color: 'bg-emerald-500 shadow-emerald-200',
+      icon: '✅',
+      isForce: false,
+    }
   }
   else {
-    return { text: '强制跳过', color: 'bg-orange-500 shadow-orange-200', icon: '⚡', isForce: true }
+    return {
+      text: `强制跳过 ${suffix}`,
+      color: 'bg-orange-500 shadow-orange-200',
+      icon: '⚡',
+      isForce: true,
+    }
   }
 })
-
 // 🟢智能操作处理
 function handleSmartAction(team) {
   if (!isJoined(team.team_id)) {
@@ -377,64 +434,58 @@ function handleSmartAction(team) {
   })
 }
 
-// 🟢 [核心修复] 真正的智能提交 (变色龙模式)
+// 🟢 [核心修复] 智能提交
 function performSmartSubmit() {
-  const task = gameStore.currentTask
+  const target = getCurrentTarget()
 
-  // 1. 安全拦截：如果没有任务信息，走兜底策略
-  if (!task) {
-    console.warn('⚠️ [智能提交] Store中无任务，启动盲发兜底')
-    // 盲发 GPS，socketStore 会自动补全 game_id
-    socketStore.submitTask({ user_location_coordinate: [0, 0] }, 'GPS_CHECK', true)
+  // 1. 安全拦截
+  if (!target) {
+    console.warn('⚠️ 无任务信息，盲发 GPS')
+    socketStore.submitTask(null, 'GPS_CHECK', true)
     return
   }
 
-  // 2. 获取机制列表 (兼容处理)
-  // 之前的修复中我们已经把机制合并到了 task 对象里，所以这里可以直接取
-  const mechanisms = task.task_complete_mechanisms || []
+  const { targetObj, isSubTask, id, name } = target
 
-  console.log('🧐 [智能提交] 当前可用机制:', mechanisms.map(m => m.mechanism_name))
+  console.log(`🎯 [智能提交] 锁定目标: ${isSubTask ? '子任务' : '主任务'} - ${name} (${id})`)
 
-  // 3. 策略 A：如果有正规的 STAFF_CONFIRM，优先使用
-  const hasStaffConfirm = mechanisms.some(m => m.mechanism_name === 'STAFF_CONFIRM')
+  // ⚠️ 关键步骤：如果是子任务，必须更新 Store 里的 selectedSubTaskId
+  // 因为 socketStore.submitTask 默认是去读 store.selectedSubTaskId 的
+  if (isSubTask) {
+    gameStore.selectedSubTaskId = id
+  }
 
-  if (hasStaffConfirm) {
-    console.log('🚀 [智能提交] 走正规通道: STAFF_CONFIRM')
-    socketStore.submitTask(null, 'STAFF_CONFIRM', true)
+  // 2. 获取机制
+  const mechanisms = targetObj.task_complete_mechanisms || targetObj.task_complete_mechanism || []
+  console.log('🧐 当前机制:', mechanisms.map(m => m.mechanism_name))
+
+  // 3. 策略 A：正规确认
+  if (mechanisms.some(m => m.mechanism_name === 'STAFF_CONFIRM')) {
+    console.log('🚀 发送 STAFF_CONFIRM')
+    // 第三个参数 false 表示这不是“主任务大结局”，而是过程中的一步
+    socketStore.submitTask(null, 'STAFF_CONFIRM', !isSubTask)
     return
   }
 
-  // 4. 策略 B：没有正规通道 (即“强制跳过”场景)，伪造数据
-  // 获取第一个可用的机制 (比如 GPS_CHECK)
+  // 4. 策略 B：伪造数据 (强制跳过)
   const firstMech = mechanisms[0]
-
   if (firstMech) {
     const mechName = firstMech.mechanism_name
-    console.log(`⚡ [智能提交] 正在伪造数据强行通过: ${mechName}`)
+    console.log(`⚡ 伪造数据: ${mechName}`)
 
-    // 🎭 构造假数据
     let fakeData = {}
-
-    if (mechName === 'GPS_CHECK') {
+    if (mechName === 'GPS_CHECK')
       fakeData = { user_location_coordinate: [0, 0] }
-    }
-    else if (mechName === 'AI_NPC_DIALOGUE_COMPLETE') {
+    else if (mechName === 'AI_NPC_DIALOGUE_COMPLETE')
       fakeData = { task_completed: true }
-    }
-    else if (mechName === 'AI_IMAGE_JUDGE') {
-      fakeData = { image: 'guide_force_skip.jpg' }
-    }
-    else if (mechName === 'AI_ANSWER_CORRECT') {
+    else if (mechName === 'AI_ANSWER_CORRECT')
       fakeData = { answer: 'FORCE_PASS' }
-    }
 
-    // 发送伪造包
-    socketStore.submitTask(fakeData, mechName, true)
+    socketStore.submitTask(fakeData, mechName, !isSubTask)
   }
   else {
-    // 5. 策略 C：任务里竟然没有任何机制？盲发 GPS
-    console.log('👻 [智能提交] 无机制可用，盲发 GPS')
-    socketStore.submitTask({ user_location_coordinate: [0, 0] }, 'GPS_CHECK', true)
+    // 5. 策略 C：兜底
+    socketStore.submitTask({ user_location_coordinate: [0, 0] }, 'GPS_CHECK', !isSubTask)
   }
 }
 // 辅助函数
@@ -463,7 +514,7 @@ function handleAssignScript(team) {
     itemList: scriptOptions.map(s => s.name),
     success: async (res) => {
       socketStore.selectScript(team.team_id, scriptOptions[res.tapIndex].id)
-      uni.showLoading({ title: 'AI生成中...', mask: true })
+      uni.showLoading({ title: 'AI剧本生成中...', mask: true })
     },
   })
 }
@@ -493,6 +544,12 @@ function handleStartGame(team) {
       }
     },
   })
+}
+
+function handleGetTask(team) {
+  // TODO
+  console.log('')
+  uni.showLoading({ title: '同步状态中...', mask: true })
 }
 
 function handleManualRefresh() {
@@ -655,8 +712,8 @@ onReachBottom(() => {
 
           <view class="px-5 py-4 border-t border-gray-50 flex justify-between items-center">
             <view class="flex -space-x-2">
-              <view class="w-8 h-8 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-xs">
-                👤
+              <view class="w-20 h-10 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-xs">
+                小队人数：
               </view>
             </view>
             <text class="text-lg font-black text-indigo-600">
@@ -668,18 +725,18 @@ onReachBottom(() => {
 
           <view class="px-5 py-4 bg-gray-50/50 flex gap-3">
             <button v-if="!isJoined(team.team_id)" class="flex-1 bg-white border border-indigo-200 text-indigo-600 rounded-xl py-3 text-sm font-bold shadow-sm active:scale-95 transition-transform" @click="handleJoinRoom(team)">
-              👉 进入房间
+              进入房间
             </button>
 
             <template v-else>
               <template v-if="team.current_status === 0 || team.current_status === 1">
-                <view class="flex gap-2">
+                <view class="flex gap-6">
                   <button
                     class="flex-1 bg-indigo-600 text-white rounded-xl py-3 text-sm font-bold shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-1"
                     :class="team.current_status === 1 ? 'bg-blue-500' : 'bg-indigo-600'"
                     @click="handleAssignScript(team)"
                   >
-                    <text>{{ team.current_status === 1 ? '🔄 重选剧本' : '🎭 分配剧本' }}</text>
+                    <text>{{ team.current_status === 1 ? '分配剧本' : '重选剧本' }}</text>
                   </button>
 
                   <button
@@ -687,7 +744,14 @@ onReachBottom(() => {
                     class="flex-1 bg-emerald-500 text-white rounded-xl py-3 text-sm font-bold shadow-lg shadow-emerald-200 active:scale-95 transition-transform flex items-center justify-center gap-1"
                     @click="handleStartGame(team)"
                   >
-                    <text>🚀 开始游戏</text>
+                    <text>开始游戏</text>
+                  </button>
+                  <button
+                    v-if="team.current_status === 1"
+                    class="flex-1 bg-blue-500 text-white rounded-xl py-3 text-sm font-bold shadow-lg shadow-emerald-200 active:scale-95 transition-transform flex items-center justify-center gap-1"
+                    @click="handleGetTask(team)"
+                  >
+                    <text>同步任务</text>
                   </button>
                 </view>
               </template>
@@ -708,9 +772,6 @@ onReachBottom(() => {
                     </view>
 
                     <view v-if="gameStore.isCurrentTaskComplete" class="flex items-center gap-1 text-gray-400">
-                      <text class="animate-spin text-xs">
-                        ⏳
-                      </text>
                       <text class="text-xs font-bold">
                         生成中...
                       </text>
@@ -747,14 +808,14 @@ onReachBottom(() => {
                       class="flex-1 bg-white border border-gray-200 text-gray-600 rounded-xl py-3 text-sm font-bold shadow-sm active:scale-95"
                       @click="handleOpenConsole(team)"
                     >
-                      🎮 详情
+                      详情
                     </button>
                   </view>
                 </view>
               </template>
 
               <button v-else-if="team.current_status === 3" class="flex-1 bg-gray-200 text-gray-500 rounded-xl py-3 text-sm font-bold" disabled>
-                🏁 已结束
+                已结束
               </button>
             </template>
           </view>
