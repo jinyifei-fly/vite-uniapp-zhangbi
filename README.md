@@ -1,4 +1,4 @@
-# Vite Uniapp Template
+﻿# Vite Uniapp Template
 
 🚀 **以实用为先的 uni-app 起手模板。** [查看演示](https://vite-uniapp-template.netlify.app/)
 
