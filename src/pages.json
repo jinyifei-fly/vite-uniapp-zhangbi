@@ -31,17 +31,6 @@
       }
     },
     {
-      "path": "pages/goods/index",
-      "aliasPath": "/goods",
-      "name": "goods",
-      "style": {
-        "navigationStyle": "custom",
-        "navigationBarTitleText": "商品",
-        "navigationBarBackgroundColor": "#FFFFFF",
-        "navigationBarTextStyle": "#3b82f6"
-      }
-    },
-    {
       "path": "pages/user/index",
       "aliasPath": "/user",
       "name": "user",
@@ -77,10 +66,6 @@
       {
         "pagePath": "pages/task/index",
         "text": "剧本"
-      },
-      {
-        "pagePath": "pages/goods/index",
-        "text": "商品"
       },
       {
         "pagePath": "pages/user/index",

@@ -17,11 +17,6 @@ const tabList = [
     path: '/pages/task/index',
   },
   {
-    text: '商品',
-
-    path: '/pages/goods/index',
-  },
-  {
     text: '我的',
 
     path: '/pages/user/index',

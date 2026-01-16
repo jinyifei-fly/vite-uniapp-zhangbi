@@ -506,7 +506,7 @@ onReachBottom(() => {
           </view>
           <view v-else class="flex items-end gap-2">
             <text class="text-xl font-black text-gray-900 tracking-tight">
-              Merchant
+              Guide
             </text>
           </view>
           <view class="flex items-center gap-1 bg-gray-100 text-gray-500 text-[10px] px-1.5 py-0.5 rounded font-bold mb-1 ml-1">

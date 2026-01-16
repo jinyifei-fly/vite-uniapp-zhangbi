@@ -231,7 +231,7 @@ function handleEditTeam(team, index) {
             </view>
 
             <view class="mt-1 text-gray-400 text-xs font-medium">
-              {{ isLogin ? '欢迎回到商户管理系统' : '登录以管理您的队伍数据' }}
+              {{ isLogin ? '欢迎回到导游管理系统' : '登录以管理您的队伍数据' }}
             </view>
           </view>
         </view>

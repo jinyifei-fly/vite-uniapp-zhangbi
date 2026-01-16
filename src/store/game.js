@@ -93,7 +93,7 @@ export const useGameStore = defineStore('game', {
 
       // --- A. ID 提取与映射 ---
       let incomingTeamId = data.team_id || rawData.team_id
-      let incomingGameId = data.game_id || rawData.game_id
+      const incomingGameId = data.game_id || rawData.game_id
 
       // 兜底：假设是当前队伍
       if (!incomingTeamId && this.currentTeamId) {

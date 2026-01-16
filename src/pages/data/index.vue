@@ -1,15 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
 
-const goodsStock = ref([
-  { id: 1, name: '手电筒', count: 5, img: '/static/images/goods/flashlight.png' },
-  { id: 2, name: '水杯', count: 3, img: '/static/images/goods/cup.png' },
-  { id: 3, name: '夜视镜', count: 2, img: '/static/images/goods/nightvision.png' },
-  { id: 4, name: '急救包', count: 1, img: '/static/images/goods/firstaid.png' },
-  { id: 5, name: '笔记本', count: 4, img: '/static/images/goods/notebook.png' },
-  { id: 6, name: '绳索', count: 2, img: '/static/images/goods/rope.png' },
-])
-
 const guestGroups = ref([
   {
     groupId: 'A组',
@@ -41,8 +32,7 @@ const guestGroups = ref([
 ])
 
 function getPropCompareResult(propName, needCount) {
-  const stockItem = goodsStock.value.find(item => item.name === propName)
-  const currentStock = stockItem ? stockItem.count : 0
+  const currentStock = 0
   return {
     currentStock,
     needCount,
@@ -61,10 +51,6 @@ const totalShortageCount = computed(() => {
   })
   return count
 })
-
-function goToGoodsManage() {
-  uni.navigateTo({ url: '/pages/goods/stock' })
-}
 </script>
 
 <template>
@@ -85,17 +71,6 @@ function goToGoodsManage() {
 
     <!-- 主体内容 -->
     <view class="content flex-1 overflow-auto p-4 md:p-6">
-      <!-- 1. 操作按钮区：快速补充库存 -->
-      <view class="operate-bar mb-6 flex justify-end">
-        <button
-          class="bg-blue-500 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
-          @click="goToGoodsManage"
-        >
-          <view class="i-carbon-add-box mr-1.5"></view>
-          前往货品管理补充库存
-        </button>
-      </view>
-
       <!-- 2. 客人分组列表：两拨客人分别展示 -->
       <view class="group-list space-y-6">
         <view v-for="(group, index) in guestGroups" :key="index">
@@ -156,13 +131,7 @@ function goToGoodsManage() {
               class="grid grid-cols-4 items-center py-3 px-4 border-t border-gray-100"
             >
               <!-- 道具名称 -->
-              <view class="col-span-1 flex items-center">
-                <!-- 匹配货品管理中的道具图片 -->
-                <image
-                  :src="goodsStock.find(item => item.name === prop.name)?.img || '/static/images/goods/default.png'"
-                  alt="道具图片"
-                  class="w-6 h-6 rounded mr-2 object-cover"
-                />
+              <view class="col-span-1">
                 <text class="text-gray-700">
                   {{ prop.name }}
                 </text>
@@ -203,13 +172,6 @@ function goToGoodsManage() {
 /* 图片加载异常占位 */
 image {
   background-color: #f9fafb;
-}
-
-/* 按钮基础样式重置 */
-button {
-  border: none;
-  outline: none;
-  cursor: pointer;
 }
 
 /* 响应式适配：小屏表格横向滚动 */

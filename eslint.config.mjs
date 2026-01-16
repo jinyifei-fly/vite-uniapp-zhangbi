@@ -14,7 +14,7 @@ export default antfu(
       html: true,
       markdown: 'prettier',
     },
-    ignores: ['**/uni_modules'],
+    ignores: ['**/uni_modules', 'README.md'],
 
     stylistic: {
       rules: {

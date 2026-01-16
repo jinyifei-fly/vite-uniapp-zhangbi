@@ -38,17 +38,6 @@ export default defineUniPages({
         navigationBarTextStyle: navBarTextColor,
       },
     },
-    {
-      path: 'pages/goods/index',
-      aliasPath: '/goods',
-      name: 'goods',
-      style: {
-        navigationStyle: 'custom',
-        navigationBarTitleText: '商品',
-        navigationBarBackgroundColor: navBarBg,
-        navigationBarTextStyle: navBarTextColor,
-      },
-    },
 
     {
       path: 'pages/user/index',
@@ -99,10 +88,6 @@ export default defineUniPages({
       {
         pagePath: 'pages/task/index',
         text: '剧本',
-      },
-      {
-        pagePath: 'pages/goods/index',
-        text: '商品',
       },
       {
         pagePath: 'pages/user/index',
