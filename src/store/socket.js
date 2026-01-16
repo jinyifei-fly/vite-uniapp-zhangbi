@@ -392,7 +392,42 @@ export const useSocketStore = defineStore('socket', {
         catch (e) {}
       }, 2000)
     },
+    forceCompleteTask(data = {}) {
+      const gameStore = useGameStore()
 
+      // 1. 安全校验
+      if (!gameStore.gameId) {
+        console.error('❌ [Socket] 强制跳过失败: 缺失 gameId')
+        uni.showToast({ title: '无游戏ID，无法操作', icon: 'none' })
+        return
+      }
+      if (!this.checkConnection())
+        return
+
+      // 2. 构造 Payload (对应后端要求的格式)
+      const payload = {
+        game_id: gameStore.gameId, // 必传
+        task_id: gameStore.currentTaskId, // 必传
+        timestamp: new Date().toISOString(),
+      }
+
+      // 3. 如果是子任务，带上 sub_task_id
+      if (data.sub_task_id) {
+        payload.sub_task_id = data.sub_task_id
+      }
+
+      console.log(`⚡ [Socket] 发送强制跳关:`, payload)
+      this.socket.emit('guide:force_complete_task', payload)
+
+      // 4. UI 反馈
+      uni.showLoading({ title: '强制通行中...', mask: true })
+      setTimeout(() => {
+        try {
+          uni.hideLoading()
+        }
+        catch (e) {}
+      }, 2000)
+    },
     checkConnection() {
       if (!this.socket || !this.isConnected) {
         uni.showToast({ title: 'Socket未连接', icon: 'none' })

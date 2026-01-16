@@ -352,28 +352,16 @@ function performSpecificSubmit(targetObj, isSubTask) {
   const mechanisms = targetObj.task_complete_mechanisms || targetObj.task_complete_mechanism || []
   const payloadExtra = isSubTask ? { sub_task_id: targetObj.sub_task_id } : {}
 
-  // 3. 策略
+  // 3. ⚖️ 策略分流
   const hasStaffConfirm = mechanisms.some(m => m.mechanism_name === 'STAFF_CONFIRM')
-  if (hasStaffConfirm) {
-    socketStore.submitTask(payloadExtra, 'STAFF_CONFIRM')
-    return
-  }
 
-  // 伪造数据
-  const firstMech = mechanisms[0]
-  if (firstMech) {
-    const mechName = firstMech.mechanism_name
-    const fakeData = { ...payloadExtra }
-    if (mechName === 'GPS_CHECK')
-      Object.assign(fakeData, { user_location_coordinate: [0, 0] })
-    else if (mechName === 'AI_NPC_DIALOGUE_COMPLETE')
-      Object.assign(fakeData, { task_completed: true })
-    else if (mechName === 'AI_ANSWER_CORRECT')
-      Object.assign(fakeData, { answer: 'FORCE_PASS' })
-    socketStore.submitTask(fakeData, mechName)
+  if (hasStaffConfirm) {
+    console.log('✅ 确认流程')
+    socketStore.submitTask(payloadExtra, 'STAFF_CONFIRM')
   }
   else {
-    socketStore.submitTask({ ...payloadExtra, user_location_coordinate: [0, 0] }, 'GPS_CHECK')
+    console.log('⚡ 强制跳关 (guide:force_complete_task)')
+    socketStore.forceCompleteTask(payloadExtra)
   }
 }
 
